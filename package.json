@@ -6,7 +6,9 @@
 	"scripts": {
 		"build": "babel -d ./lib ./src",
 		"prepublish": "babel -d ./lib ./src --minified",
-		"test": "babel --no-babelrc --plugins=./lib/index.js test.ts --out-file test.opt.js"
+		"bench": "npm run build && node ./bench/index.js",
+		"bench-fast": "npm run build && node ./bench/index.js -t 1",
+		"test": "npm run build && babel --no-babelrc --plugins=./lib/index.js test.ts --out-file test.opt.js"
 	},
 	"repository": {
 		"type": "git",
@@ -22,6 +24,8 @@
 		"@babel/core": "latest",
 		"@babel/preset-env": "latest",
 		"@babel/preset-typescript": "latest",
-		"@babel/cli": "latest"
+		"@babel/cli": "latest",
+		"benchmark": "^2.1.4",
+		"command-line-args": "^5.0.2"
 	}
 }
