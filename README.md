@@ -1,13 +1,21 @@
 # babel-plugin-loop-optimizer
 
 Optimizes `.forEach`, `.every`, `.find`, `.map`, `.filter`, `.reduce`, `.reduceRight`, `.some` statements to `for` statements
+
 Arrow Expressions and inline functions are also altered to implement functionality directly in the loop, removing the need to craft and then invoke a function.
+
 Returns, for the most part, are changed into a combination of assignments and either continues; or breaks;
+
 Loops are conditonally labeled if required for altering a function.
+
 Also, ternary and logical operations are supported (`logicCheck() ? map : null` or `logicCheck() && map`).  An if statement will be inserted before the loop (`if(logicCheck())`), based on what needs to be evaluated.
+
 Because of this, ternary and logical operations should not have side effects, nor should they be computationally expensive (since they essentially need to be evaluated at least twice).
+
 Unlike the original babel-plugin-loop-optimizer, by default, for loops are evaluted from left-to-right. A comment of `//loop-optimizer: AGGRO` will use the more aggressive `while(iterator--)` methodology.
+
 This hasn't been posted to NPM yet.  I'm not sure what I'll do with this project.  The idea is to use it with JSX, where many renders with `.map` invocations can be optimized, especially for older browsers or node environments.
+
 The `lib_4-5-2020_index.js` is provided, if you want to use it in your project.
 
 #### Example benchmark output, based on Faster.js' benchmark
