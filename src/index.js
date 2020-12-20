@@ -1,3 +1,5 @@
+let LET = "let";
+
 /**
  * 
  * @param {*} path Path to search
@@ -104,7 +106,8 @@ function _craftAssignAndContinueExprs(returnModder, body, isLabelNeeded) {
 	let exprType = mode <= 1 ? 0
 		: bodExpr.type === "BooleanLiteral" ? (bodExpr.value===false ? 1 : bodExpr.value===true ? 2 : 0)
 		: 0;
-	let stmt = mode === 1 ? t.expressionStatement(t.assignmentExpression("=",t.memberExpression(resArrName, iterator, true), bodExpr))
+	let stmt = mode === 0 ? t.expressionStatement(bodExpr)
+		: mode === 1 ? t.expressionStatement(t.assignmentExpression("=",t.memberExpression(resArrName, iterator, true), bodExpr))
 		: mode === 2 ?
 			exprType === 1 ? null : exprType === 2 ? t.expressionStatement(t.callExpression(t.memberExpression(resArrName, t.identifier("push")), [itemName]))
 			: t.ifStatement(bodExpr, t.expressionStatement(t.callExpression(t.memberExpression(resArrName, t.identifier("push")), [itemName])))
@@ -191,14 +194,14 @@ function Handle_map(t, path, optimize, checkUndefined, mode) {
 		len = path.scope.generateUidIdentifier("L"),
 		itemName = isInFn ? func.params && func.params[(mode===5||mode===6) ? 1 : 0] || ((mode >= 3) && path.scope.generateUidIdentifier("n")) || null : path.scope.generateUidIdentifier("n"),
 		resArrName = mode > 0 ? (mode===5||mode===6) && func.params && func.params[0] || path.scope.generateUidIdentifier("r") : null,
-		body = isInFn ? func.body.body || func.body : null,
+		body = isInFn ? func.body.type === "CallExpression" && (func.body = t.returnStatement(func.body)) || func.body.body || func.body : null,
 		lastOfBod = isInFn ? body.length ? body[body.length-1] : body : null,
 		block = path.findParent(p => p.isBlockStatement() || p.isProgram()),
 		startIf = _logicalExpressionToPath(t, path),
 		returnModder = { t, path, itemName, resArrName, iterator, forState, mode };
 
 	if(isInFn) {
-		let itemDeclr = t.variableDeclaration("let", [t.variableDeclarator(itemName, t.memberExpression(arrayName,iterator,true))]);
+		let itemDeclr = t.variableDeclaration(LET, [t.variableDeclarator(itemName, t.memberExpression(arrayName,iterator,true))]);
 		if(!body.length) {
 			let assigns = _craftAssignAndContinueExprs(returnModder, lastOfBod, null);
 			let funcLiteralIgnore = func.body.type.lastIndexOf("Literal")>=0;
@@ -213,6 +216,9 @@ function Handle_map(t, path, optimize, checkUndefined, mode) {
 				if(exprs.length === 2 && exprs[1].type==="BreakStatement") body.push(exprs[1]);
 			}
 			_modReturnsToAssignsAndContinues(returnModder, body, false);
+			if(body[body.length - 1].type === "ContinueStatement") {
+				body.splice(body.length - 1, 1);
+			}
 		}
 	}
 
@@ -228,12 +234,12 @@ function Handle_map(t, path, optimize, checkUndefined, mode) {
 
 	var forState = optimize
 		? t.forStatement(
-			t.variableDeclaration("let", [t.variableDeclarator (iterator,len)]),
+			t.variableDeclaration(LET, [t.variableDeclarator (iterator,len)]),
 			checkUndefined ? t.logicalExpression("&&", t.updateExpression("--", iterator), t.binaryExpression("!==", t.memberExpression (arrayName,iterator,true), t.identifier("undefined"))) : t.updateExpression("--", iterator),
 			null, expr
 		)
 		: t.forStatement(
-			t.variableDeclaration("let", [t.variableDeclarator(iterator, t.numericLiteral(0))]),
+			t.variableDeclaration(LET, [t.variableDeclarator(iterator, t.numericLiteral(0))]),
 			checkUndefined ? t.logicalExpression("&&", t.binaryExpression("<",iterator,len), t.binaryExpression("!==", t.memberExpression(arrayName,iterator,true), t.identifier("undefined"))) : t.binaryExpression("<",iterator,len),
 			t.updateExpression("++", iterator), expr
 		)
@@ -246,9 +252,9 @@ function Handle_map(t, path, optimize, checkUndefined, mode) {
 
 	var exprs = [];	
 	if(!useArrExpr) {
-		exprs.push(t.variableDeclaration("let", [t.variableDeclarator(arrayName, path.node.callee.object)]));
+		exprs.push(t.variableDeclaration(LET, [t.variableDeclarator(arrayName, path.node.callee.object)]));
 	}
-	exprs.push(t.variableDeclaration("let", [t.variableDeclarator(len, t.memberExpression(arrayName, t.identifier('length')))]));
+	exprs.push(t.variableDeclaration(LET, [t.variableDeclarator(len, t.memberExpression(arrayName, t.identifier('length')))]));
 	var resExpr = mode === 1 ? t.newExpression(t.identifier('Array'), [len])
 		: mode === 2 ? t.arrayExpression()
 		: mode === 3 ? "\0"
@@ -260,16 +266,16 @@ function Handle_map(t, path, optimize, checkUndefined, mode) {
 		if(startIf) {
 			if(resExpr !== "\0") exprs.push(t.expressionStatement(t.assignmentExpression("=", resArrName, resExpr)));
 		} else {
-			exprs.push(t.variableDeclaration("let", [resExpr === "\0" ?  t.variableDeclarator(resArrName) : t.variableDeclarator(resArrName, resExpr)]));
+			exprs.push(t.variableDeclaration(LET, [resExpr === "\0" ?  t.variableDeclarator(resArrName) : t.variableDeclarator(resArrName, resExpr)]));
 		}
 	}
 	if(!isInFn) {
-		exprs.push(t.variableDeclaration("let", [t.variableDeclarator(funcName,path.node.arguments[0])]));
+		exprs.push(t.variableDeclaration(LET, [t.variableDeclarator(funcName,path.node.arguments[0])]));
 	}
 	exprs.push(forState);
 
 	if(startIf) {
-		block.node.body.unshift(t.variableDeclaration("let", [t.variableDeclarator(resArrName)]))
+		block.node.body.unshift(t.variableDeclaration(LET, [t.variableDeclarator(resArrName)]))
 		path.getStatementParent().insertBefore([ t.ifStatement(startIf, t.blockStatement(exprs)) ])
 	} else {
 		path.getStatementParent().insertBefore(exprs)
@@ -284,16 +290,16 @@ function Handle_map(t, path, optimize, checkUndefined, mode) {
 	}
 }
 
-export default babel => {
+export default (babel, opts) => {
 	const { types: t } = babel
 	const methods = { forEach:0, map:1, filter:2, find:3, every:4, reduce:5, reduceRight:6, some:7 };
-
+	if(opts.loose) LET = "var";
 	return {
 		visitor: {
 			CallExpression(path) {
 				if(path.node.callee.property) { // && path.node.arguments.length === 1)
 					var method = methods[path.node.callee.property.name];
-					if(method !== undefined) {
+					if(method !== undefined && !isNaN(method)) {
 						var opts = _findOrMakeStatementBlockAndGetOptions(t, path);
 						if(opts) { // Opts change to support find/reduce/reduceRight properly. Path changes due to arrowExpression.
 							if(method===3 || method===5) opts[0]=false;
