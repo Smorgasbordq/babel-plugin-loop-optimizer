@@ -59,11 +59,16 @@ var aFun = null || function() {
     // EVERY
     "test0" ? true : {b: "test1" && false || {a: ar.every(e => e >= 0.05) }};
     //FILTER
-    // ar.filter((e, i) => false );
-    ar.find((e, i) => false );
-    ar.filter((e, i) => i % 2 === 0);
+    function doFilter(x) { return !!x; }
+    ar.filter(/* doFilter */ doFilter);
+    ar.find(/** find */(e, i) => true );
+    ar.filter(/** filter */(e, i) => i % 2 === 0);
     //FOREACH
-    ar.forEach((e, i) => { results.push({ e, i }); });
+    ar.forEach((e, i) => { /** for each */ results.push({ e, i }); });
+    ar.forEach((e, i) => /** for each1 */ results.push({ e, i }) );
+    ar.forEach(function (listener) {
+        return listener.apply(void 0, args);
+      });
     //MAP
     ar.map((e, i) => { e + i });
     //REDUCE

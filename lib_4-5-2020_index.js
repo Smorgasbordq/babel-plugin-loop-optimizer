@@ -188,6 +188,30 @@ function _modReturnsToAssignsAndContinues(returnModder, body, isLabelNeeded) {
     }
   }
 }
+
+function first() {
+  return true;
+}
+
+function getParent(path) {
+  var cur = path,
+      par = path.findParent(first),
+      idx = -1;
+
+  while (par) {
+    if (par.node.body && !!par.node.body.splice) {
+      idx = par.node.body.indexOf(cur.node);
+      break;
+    }
+
+    cur = par;
+    par = par.findParent(first);
+  }
+
+  if (!par) throw Error("No Parent for loop optims");
+  if (idx < 0) throw Error("Could not find child from parent for loop optims");
+  return [par, idx];
+}
 /**
  * 
  * @param {*} t babel t
@@ -210,9 +234,9 @@ function Handle_map(t, path, optimize, checkUndefined, mode) {
       resArrName = mode > 0 ? (mode === 5 || mode === 6) && func.params && func.params[0] || path.scope.generateUidIdentifier("r") : null,
       body = isInFn ? func.body.type === "CallExpression" && (func.body = t.returnStatement(func.body)) || func.body.body || func.body : null,
       lastOfBod = isInFn ? body.length ? body[body.length - 1] : body : null,
-      block = path.findParent(function (p) {
-    return p.isBlockStatement() || p.isProgram();
-  }),
+      blockAndIdx = getParent(path),
+      block = blockAndIdx[0],
+      blockIdx = blockAndIdx[1],
       startIf = _logicalExpressionToPath(t, path),
       returnModder = {
     t: t,
@@ -224,9 +248,9 @@ function Handle_map(t, path, optimize, checkUndefined, mode) {
     mode: mode
   };
 
-  if (isInFn) {
-    var itemDeclr = t.variableDeclaration(LET, [t.variableDeclarator(itemName, t.memberExpression(arrayName, iterator, true))]);
+  var itemDeclr = t.variableDeclaration(LET, [t.variableDeclarator(itemName, t.memberExpression(arrayName, iterator, true))]);
 
+  if (isInFn) {
     if (!body.length) {
       var assigns = _craftAssignAndContinueExprs(returnModder, lastOfBod, null);
 
@@ -252,17 +276,23 @@ function Handle_map(t, path, optimize, checkUndefined, mode) {
     }
   }
 
-  var funcName = isInFn ? null : path.scope.generateUidIdentifier("f"),
+  var funcName = isInFn ? null : path.node.arguments[0]
+  /* used to generate fn var, but not really needed: path.scope.generateUidIdentifier("f")*/
+  ,
       expr;
 
   if (isInFn) {
     expr = func.body;
   } else {
-    var calling = t.callExpression(funcName, mode === 5 || mode === 6 ? [resArrName, t.memberExpression(arrayName, iterator, true), iterator, arrayName] : [t.memberExpression(arrayName, iterator, true), iterator, arrayName]);
+    var calling = t.callExpression(funcName, mode === 5 || mode === 6 ? [resArrName, itemName, iterator, arrayName] : [itemName, iterator, arrayName]);
 
     var _exprs2 = _craftAssignAndContinueExprs(returnModder, calling, null);
 
-    expr = _exprs2.length === 2 && _exprs2[1].type === "BreakStatement" ? t.blockStatement(_exprs2) : _exprs2[0];
+    if (_exprs2.length !== 2 || _exprs2[1].type !== "BreakStatement") _exprs2.splice(1, 1);
+
+    _exprs2.splice(0, 0, itemDeclr);
+
+    expr = t.blockStatement(_exprs2);
   }
 
   var forState = optimize ? t.forStatement(t.variableDeclaration(LET, [t.variableDeclarator(iterator, len)]), checkUndefined ? t.logicalExpression("&&", t.updateExpression("--", iterator), t.binaryExpression("!==", t.memberExpression(arrayName, iterator, true), t.identifier("undefined"))) : t.updateExpression("--", iterator), null, expr) : t.forStatement(t.variableDeclaration(LET, [t.variableDeclarator(iterator, t.numericLiteral(0))]), checkUndefined ? t.logicalExpression("&&", t.binaryExpression("<", iterator, len), t.binaryExpression("!==", t.memberExpression(arrayName, iterator, true), t.identifier("undefined"))) : t.binaryExpression("<", iterator, len), t.updateExpression("++", iterator), expr); // Change the forState to be the labled for statement.
@@ -287,19 +317,18 @@ function Handle_map(t, path, optimize, checkUndefined, mode) {
     } else {
       exprs.push(t.variableDeclaration(LET, [resExpr === "\0" ? t.variableDeclarator(resArrName) : t.variableDeclarator(resArrName, resExpr)]));
     }
-  }
+  } // if (!isInFn) {
+  //	exprs.push(t.variableDeclaration(LET, [t.variableDeclarator(funcName, path.node.arguments[0])]));
+  // }
 
-  if (!isInFn) {
-    exprs.push(t.variableDeclaration(LET, [t.variableDeclarator(funcName, path.node.arguments[0])]));
-  }
 
   exprs.push(forState);
+  var blockNextPath = block.get("body." + blockIdx);
 
   if (startIf) {
-    block.node.body.unshift(t.variableDeclaration(LET, [t.variableDeclarator(resArrName)]));
-    path.getStatementParent().insertBefore([t.ifStatement(startIf, t.blockStatement(exprs))]);
+    blockNextPath.insertBefore([t.variableDeclaration(LET, [t.variableDeclarator(resArrName)]), t.ifStatement(startIf, t.blockStatement(exprs))]);
   } else {
-    path.getStatementParent().insertBefore(exprs);
+    blockNextPath.insertBefore(exprs);
   }
 
   var parentType = path.parentPath.type;
@@ -313,7 +342,7 @@ function Handle_map(t, path, optimize, checkUndefined, mode) {
   }
 }
 
-var _default = function _default(babel) {
+var _default = function _default(babel, opts) {
   var t = babel.types;
   var methods = {
     forEach: 0,
@@ -325,7 +354,7 @@ var _default = function _default(babel) {
     reduceRight: 6,
     some: 7
   };
-  if (babel.loose) LET = "var";
+  if (opts.loose) LET = "var";
   return {
     visitor: {
       CallExpression: function CallExpression(path) {

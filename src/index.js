@@ -13,7 +13,7 @@ function _findOrMakeStatementBlockAndGetOptions(t, incPath) {
 			isStmt = path.isStatement() || path.isProgram(),
 			comment;
 
-		if(isStmt) {
+		if (isStmt) {
 			var comments = path.node.leadingComments
 			if (comments && comments[comments.length - 1]) {
 				comment = comments[comments.length - 1].value
@@ -23,30 +23,30 @@ function _findOrMakeStatementBlockAndGetOptions(t, incPath) {
 			}
 		}
 
-		if(par) switch(par.type) {
-		case "IfStatement":
-			rp = par.get("consequent");
-			if(!t.isBlockStatement(rp.node)) {
-				rp.replaceWith(t.blockStatement([ rp.node ]));
-			}
-			break;
-		case "ForStatement":
-		case "WhileStatement":
-			rp = par.get("body");
-			if(!t.isBlockStatement(rp.node)) {
-				rp.replaceWith(t.blockStatement([ rp.node ]));
-			}
-			break;
-		case "ArrowFunctionExpression":
-			rp = par.get("body");
-			if(!t.isBlockStatement(rp.node)) {
-				rp.replaceWith(t.blockStatement([ t.returnStatement(rp.node) ]))
-			}
-			break;
+		if (par) switch (par.type) {
+			case "IfStatement":
+				rp = par.get("consequent");
+				if (!t.isBlockStatement(rp.node)) {
+					rp.replaceWith(t.blockStatement([rp.node]));
+				}
+				break;
+			case "ForStatement":
+			case "WhileStatement":
+				rp = par.get("body");
+				if (!t.isBlockStatement(rp.node)) {
+					rp.replaceWith(t.blockStatement([rp.node]));
+				}
+				break;
+			case "ArrowFunctionExpression":
+				rp = par.get("body");
+				if (!t.isBlockStatement(rp.node)) {
+					rp.replaceWith(t.blockStatement([t.returnStatement(rp.node)]))
+				}
+				break;
 		}
 
-		if(isStmt) {
-			return !comment ? [false, false] : [ /^\s*loop-optimizer:(.*),?AGGRO/.test(comment), /^\s*loop-optimizer:(.*),?POSSIBLE_UNDEFINED/.test(comment)];
+		if (isStmt) {
+			return !comment ? [false, false] : [/^\s*loop-optimizer:(.*),?AGGRO/.test(comment), /^\s*loop-optimizer:(.*),?POSSIBLE_UNDEFINED/.test(comment)];
 		}
 	} while (path = path.parentPath);
 
@@ -63,23 +63,23 @@ function _logicalExpressionToPath(t, path) {
 		oldNodeOfPath = path.node,
 		createdNode,
 		expr;
-	while(par) {
-		if(par.isStatement()) { // was isBlockStatement || isVariableDeclarator
+	while (par) {
+		if (par.isStatement()) { // was isBlockStatement || isVariableDeclarator
 			break;
 		}
-		if(par.isConditionalExpression() || par.isLogicalExpression()) {
-			createdNode = par.node;			
-			/**/ if(createdNode.alternate === oldNodeOfPath) createdNode = t.unaryExpression("!", createdNode.test);
-			else if(createdNode.consequent === oldNodeOfPath) createdNode = createdNode.test;
-			else if(createdNode.right === oldNodeOfPath) createdNode = 
-				createdNode.operator==="&&" ? createdNode.left
-				: createdNode.operator==="??" ? t.binaryExpression("==", createdNode.left, t.identifier("null"))
-				: t.unaryExpression("!", createdNode.left)
+		if (par.isConditionalExpression() || par.isLogicalExpression()) {
+			createdNode = par.node;
+			/**/ if (createdNode.alternate === oldNodeOfPath) createdNode = t.unaryExpression("!", createdNode.test);
+			else if (createdNode.consequent === oldNodeOfPath) createdNode = createdNode.test;
+			else if (createdNode.right === oldNodeOfPath) createdNode =
+				createdNode.operator === "&&" ? createdNode.left
+					: createdNode.operator === "??" ? t.binaryExpression("==", createdNode.left, t.identifier("null"))
+						: t.unaryExpression("!", createdNode.left)
 			else createdNode = null;
 			//else if(createdNode.test === oldNodeOfPath) createdNode = null;
 			//else if(createdNode.left === oldNodeOfPath) createdNode = null;
-			
-			if(createdNode) {
+
+			if (createdNode) {
 				expr = expr ? t.logicalExpression("&&", createdNode, expr) : createdNode;
 			}
 		}
@@ -99,32 +99,32 @@ function _logicalExpressionToPath(t, path) {
  */
 function _craftAssignAndContinueExprs(returnModder, body, isLabelNeeded) {
 	const { t, path, itemName, resArrName, iterator, mode } = returnModder;
-	if(!returnModder.lbl && (isLabelNeeded===2 || (isLabelNeeded===1 && (mode===3 || mode===4)))) {
+	if (!returnModder.lbl && (isLabelNeeded === 2 || (isLabelNeeded === 1 && (mode === 3 || mode === 4)))) {
 		returnModder.lbl = t.labeledStatement(path.scope.generateUidIdentifier("l"), t.blockStatement([]));
 	}
 	let bodExpr = body.argument || body.expression || body;
 	let exprType = mode <= 1 ? 0
-		: bodExpr.type === "BooleanLiteral" ? (bodExpr.value===false ? 1 : bodExpr.value===true ? 2 : 0)
-		: 0;
+		: bodExpr.type === "BooleanLiteral" ? (bodExpr.value === false ? 1 : bodExpr.value === true ? 2 : 0)
+			: 0;
 	let stmt = mode === 0 ? t.expressionStatement(bodExpr)
-		: mode === 1 ? t.expressionStatement(t.assignmentExpression("=",t.memberExpression(resArrName, iterator, true), bodExpr))
-		: mode === 2 ?
-			exprType === 1 ? null : exprType === 2 ? t.expressionStatement(t.callExpression(t.memberExpression(resArrName, t.identifier("push")), [itemName]))
-			: t.ifStatement(bodExpr, t.expressionStatement(t.callExpression(t.memberExpression(resArrName, t.identifier("push")), [itemName])))
-		: mode === 3 ?
-			exprType === 1 ? null : exprType === 2 ? t.expressionStatement(t.assignmentExpression("=",resArrName,itemName))
-			: t.ifStatement(bodExpr, t.blockStatement([t.expressionStatement(t.assignmentExpression("=",resArrName,itemName)), isLabelNeeded ? t.breakStatement(returnModder.lbl.label) : t.breakStatement()]))
-		: mode === 4 ?
-			exprType === 2 ? null : exprType === 1 ? t.expressionStatement(t.assignmentExpression("=",resArrName,t.booleanLiteral(false)))
-			: t.ifStatement(t.unaryExpression("!", bodExpr), t.blockStatement([t.expressionStatement(t.assignmentExpression("=",resArrName,t.booleanLiteral(false))), isLabelNeeded ? t.breakStatement(returnModder.lbl.label) : t.breakStatement() ]))
-		: mode === 5 || mode === 6 ?
-			t.expressionStatement(t.assignmentExpression("=",resArrName,bodExpr))
-		: mode === 7 ?
-			exprType === 1 ? null : exprType === 2 ? t.expressionStatement(t.assignmentExpression("=",resArrName,t.booleanLiteral(true)))
-			: t.ifStatement(bodExpr, t.blockStatement([t.expressionStatement(t.assignmentExpression("=",resArrName,t.booleanLiteral(true))), isLabelNeeded ? t.breakStatement(returnModder.lbl.label) : t.breakStatement()]))
-		: null;
-	let next = mode===3&&exprType===2 || mode===4&&exprType===1 || mode===6&&exprType===2 ? isLabelNeeded ? t.breakStatement(returnModder.lbl.label) : t.breakStatement()
-		:  isLabelNeeded===2 ? t.continueStatement(returnModder.lbl.label) : t.continueStatement();
+		: mode === 1 ? t.expressionStatement(t.assignmentExpression("=", t.memberExpression(resArrName, iterator, true), bodExpr))
+			: mode === 2 ?
+				exprType === 1 ? null : exprType === 2 ? t.expressionStatement(t.callExpression(t.memberExpression(resArrName, t.identifier("push")), [itemName]))
+					: t.ifStatement(bodExpr, t.expressionStatement(t.callExpression(t.memberExpression(resArrName, t.identifier("push")), [itemName])))
+				: mode === 3 ?
+					exprType === 1 ? null : exprType === 2 ? t.expressionStatement(t.assignmentExpression("=", resArrName, itemName))
+						: t.ifStatement(bodExpr, t.blockStatement([t.expressionStatement(t.assignmentExpression("=", resArrName, itemName)), isLabelNeeded ? t.breakStatement(returnModder.lbl.label) : t.breakStatement()]))
+					: mode === 4 ?
+						exprType === 2 ? null : exprType === 1 ? t.expressionStatement(t.assignmentExpression("=", resArrName, t.booleanLiteral(false)))
+							: t.ifStatement(t.unaryExpression("!", bodExpr), t.blockStatement([t.expressionStatement(t.assignmentExpression("=", resArrName, t.booleanLiteral(false))), isLabelNeeded ? t.breakStatement(returnModder.lbl.label) : t.breakStatement()]))
+						: mode === 5 || mode === 6 ?
+							t.expressionStatement(t.assignmentExpression("=", resArrName, bodExpr))
+							: mode === 7 ?
+								exprType === 1 ? null : exprType === 2 ? t.expressionStatement(t.assignmentExpression("=", resArrName, t.booleanLiteral(true)))
+									: t.ifStatement(bodExpr, t.blockStatement([t.expressionStatement(t.assignmentExpression("=", resArrName, t.booleanLiteral(true))), isLabelNeeded ? t.breakStatement(returnModder.lbl.label) : t.breakStatement()]))
+								: null;
+	let next = mode === 3 && exprType === 2 || mode === 4 && exprType === 1 || mode === 6 && exprType === 2 ? isLabelNeeded ? t.breakStatement(returnModder.lbl.label) : t.breakStatement()
+		: isLabelNeeded === 2 ? t.continueStatement(returnModder.lbl.label) : t.continueStatement();
 	return stmt && next ? [stmt, next] : stmt ? [stmt] : [next];
 }
 
@@ -137,20 +137,20 @@ function _craftAssignAndContinueExprs(returnModder, body, isLabelNeeded) {
 function _modReturnsToAssignsAndContinues(returnModder, body, isLabelNeeded) {
 	const { t } = returnModder;
 	// Hack to support body not being an array.
-	for(let i=0, I=body.length || 1; i<I; i++) {
+	for (let i = 0, I = body.length || 1; i < I; i++) {
 		let bod = body[i] || body, type = bod.type;
-		if(type === "ArrowFunctionExpression" || type === "FunctionExpression" || type === "FunctionDeclaration") {
+		if (type === "ArrowFunctionExpression" || type === "FunctionExpression" || type === "FunctionDeclaration") {
 			continue;
 		}
 		let isLabelNeededForBod = isLabelNeeded === 2 || type === "ForStatement" || type === "WhileStatement" ? 2
 			: type === "SwitchStatement" ? 1
-			: isLabelNeeded;
+				: isLabelNeeded;
 
 		let cons;
-		if(type === "ReturnStatement") {
-			if(body.length) { // If possible, alter the array.
+		if (type === "ReturnStatement") {
+			if (body.length) { // If possible, alter the array.
 				let res = _craftAssignAndContinueExprs(returnModder, bod, isLabelNeededForBod);
-				if(res.length === 1) {
+				if (res.length === 1) {
 					body[i] = res[0];
 				} else {
 					body[i] = res[0];
@@ -159,21 +159,37 @@ function _modReturnsToAssignsAndContinues(returnModder, body, isLabelNeeded) {
 				}
 			} else { // Otherwise, use assign to change the body into a blockStatement. This shouldn't be reached though.
 				let res = _craftAssignAndContinueExprs(returnModder, bod, isLabelNeededForBod);
-				Object.assign(body, res.length===1 ? res[0] : t.blockStatement( res ));
-			}	
-		} else if((cons=bod.consequent) && cons.type === "ReturnStatement") {
+				Object.assign(body, res.length === 1 ? res[0] : t.blockStatement(res));
+			}
+		} else if ((cons = bod.consequent) && cons.type === "ReturnStatement") {
 			let res = _craftAssignAndContinueExprs(returnModder, cons, isLabelNeededForBod);
-			bod.consequent = res.length===1 ? res[0] : t.blockStatement( res );
-		} else if(cons && cons.body){
+			bod.consequent = res.length === 1 ? res[0] : t.blockStatement(res);
+		} else if (cons && cons.body) {
 			_modReturnsToAssignsAndContinues(returnModder, cons.body, isLabelNeededForBod);
-		} else if(cons && cons.length){
-			_modReturnsToAssignsAndContinues(returnModder, cons, isLabelNeededForBod);		
-		} else if(bod.cases) {
+		} else if (cons && cons.length) {
+			_modReturnsToAssignsAndContinues(returnModder, cons, isLabelNeededForBod);
+		} else if (bod.cases) {
 			_modReturnsToAssignsAndContinues(returnModder, bod.cases, isLabelNeededForBod);
-		} else if(bod.body) {
+		} else if (bod.body) {
 			_modReturnsToAssignsAndContinues(returnModder, bod.body, isLabelNeededForBod);
 		}
 	}
+}
+
+function first() { return true }
+function getParent(path) {
+	let cur = path, par = path.findParent(first), idx = -1;
+	while (par) {
+		if (par.node.body && !!par.node.body.splice) {
+			idx = par.node.body.indexOf(cur.node);
+			break;
+		}
+		cur = par;
+		par = par.findParent(first);
+	}
+	if (!par) throw Error("No Parent for loop optims");
+	if (idx < 0) throw Error("Could not find child from parent for loop optims");
+	return [par, idx];
 }
 
 /**
@@ -190,123 +206,128 @@ function Handle_map(t, path, optimize, checkUndefined, mode) {
 		arrayName = useArrExpr ? path.node.callee.object : path.scope.generateUidIdentifier("a"),
 		type = func.type,
 		isInFn = type === "ArrowFunctionExpression" || type === "FunctionExpression",
-		iterator = isInFn && func.params && func.params[(mode===5||mode===6) ? 2 : 1] || path.scope.generateUidIdentifier("i"),
+		iterator = isInFn && func.params && func.params[(mode === 5 || mode === 6) ? 2 : 1] || path.scope.generateUidIdentifier("i"),
 		len = path.scope.generateUidIdentifier("L"),
-		itemName = isInFn ? func.params && func.params[(mode===5||mode===6) ? 1 : 0] || ((mode >= 3) && path.scope.generateUidIdentifier("n")) || null : path.scope.generateUidIdentifier("n"),
-		resArrName = mode > 0 ? (mode===5||mode===6) && func.params && func.params[0] || path.scope.generateUidIdentifier("r") : null,
+		itemName = isInFn ? func.params && func.params[(mode === 5 || mode === 6) ? 1 : 0] || ((mode >= 3) && path.scope.generateUidIdentifier("n")) || null : path.scope.generateUidIdentifier("n"),
+		resArrName = mode > 0 ? (mode === 5 || mode === 6) && func.params && func.params[0] || path.scope.generateUidIdentifier("r") : null,
 		body = isInFn ? func.body.type === "CallExpression" && (func.body = t.returnStatement(func.body)) || func.body.body || func.body : null,
-		lastOfBod = isInFn ? body.length ? body[body.length-1] : body : null,
-		block = path.findParent(p => p.isBlockStatement() || p.isProgram()),
+		lastOfBod = isInFn ? body.length ? body[body.length - 1] : body : null,
+		blockAndIdx = getParent(path),
+		block = blockAndIdx[0],
+		blockIdx = blockAndIdx[1],
 		startIf = _logicalExpressionToPath(t, path),
 		returnModder = { t, path, itemName, resArrName, iterator, forState, mode };
 
-	if(isInFn) {
-		let itemDeclr = t.variableDeclaration(LET, [t.variableDeclarator(itemName, t.memberExpression(arrayName,iterator,true))]);
-		if(!body.length) {
+	let itemDeclr = t.variableDeclaration(LET, [t.variableDeclarator(itemName, t.memberExpression(arrayName, iterator, true))]);
+	if (isInFn) {
+		if (!body.length) {
 			let assigns = _craftAssignAndContinueExprs(returnModder, lastOfBod, null);
-			let funcLiteralIgnore = func.body.type.lastIndexOf("Literal")>=0;
-			func.body = t.blockStatement(assigns.length===1 ? funcLiteralIgnore ? [] : [itemDeclr, func.body] : assigns[1].type==="BreakStatement" ? [itemDeclr, assigns[0], assigns[1]] : [itemDeclr, assigns[0]]);
+			let funcLiteralIgnore = func.body.type.lastIndexOf("Literal") >= 0;
+			func.body = t.blockStatement(assigns.length === 1 ? funcLiteralIgnore ? [] : [itemDeclr, func.body] : assigns[1].type === "BreakStatement" ? [itemDeclr, assigns[0], assigns[1]] : [itemDeclr, assigns[0]]);
 		} else {
-			if(itemName) {
+			if (itemName) {
 				body.unshift(itemDeclr)
 			}
-			if(mode > 0 && lastOfBod && (lastOfBod.expression || lastOfBod.argument)) {
+			if (mode > 0 && lastOfBod && (lastOfBod.expression || lastOfBod.argument)) {
 				let exprs = _craftAssignAndContinueExprs(returnModder, lastOfBod, null);
-				body[body.length-1] = exprs[0];
-				if(exprs.length === 2 && exprs[1].type==="BreakStatement") body.push(exprs[1]);
+				body[body.length - 1] = exprs[0];
+				if (exprs.length === 2 && exprs[1].type === "BreakStatement") body.push(exprs[1]);
 			}
 			_modReturnsToAssignsAndContinues(returnModder, body, false);
-			if(body[body.length - 1].type === "ContinueStatement") {
+			if (body[body.length - 1].type === "ContinueStatement") {
 				body.splice(body.length - 1, 1);
 			}
 		}
 	}
 
-	var funcName = isInFn ? null : path.scope.generateUidIdentifier("f"),
-		expr;
-	if(isInFn) {
+	var funcName = isInFn ? null : path.node.arguments[0] /* used to generate fn var, but not really needed: path.scope.generateUidIdentifier("f")*/, expr;
+	if (isInFn) {
 		expr = func.body;
 	} else {
-		var calling = t.callExpression(funcName,mode===5||mode===6 ? [resArrName, t.memberExpression(arrayName,iterator,true), iterator, arrayName] : [t.memberExpression(arrayName,iterator,true), iterator, arrayName]);
+		var calling = t.callExpression(funcName, mode === 5 || mode === 6 ? [resArrName, itemName, iterator, arrayName] : [itemName, iterator, arrayName]);
 		let exprs = _craftAssignAndContinueExprs(returnModder, calling, null);
-		expr = (exprs.length === 2 && exprs[1].type==="BreakStatement") ? t.blockStatement(exprs) : exprs[0];
+		if (exprs.length !== 2 || exprs[1].type !== "BreakStatement") exprs.splice(1, 1);
+		exprs.splice(0, 0, itemDeclr);
+		expr = t.blockStatement(exprs);
 	}
 
 	var forState = optimize
 		? t.forStatement(
-			t.variableDeclaration(LET, [t.variableDeclarator (iterator,len)]),
-			checkUndefined ? t.logicalExpression("&&", t.updateExpression("--", iterator), t.binaryExpression("!==", t.memberExpression (arrayName,iterator,true), t.identifier("undefined"))) : t.updateExpression("--", iterator),
+			t.variableDeclaration(LET, [t.variableDeclarator(iterator, len)]),
+			checkUndefined ? t.logicalExpression("&&", t.updateExpression("--", iterator), t.binaryExpression("!==", t.memberExpression(arrayName, iterator, true), t.identifier("undefined"))) : t.updateExpression("--", iterator),
 			null, expr
 		)
 		: t.forStatement(
 			t.variableDeclaration(LET, [t.variableDeclarator(iterator, t.numericLiteral(0))]),
-			checkUndefined ? t.logicalExpression("&&", t.binaryExpression("<",iterator,len), t.binaryExpression("!==", t.memberExpression(arrayName,iterator,true), t.identifier("undefined"))) : t.binaryExpression("<",iterator,len),
+			checkUndefined ? t.logicalExpression("&&", t.binaryExpression("<", iterator, len), t.binaryExpression("!==", t.memberExpression(arrayName, iterator, true), t.identifier("undefined"))) : t.binaryExpression("<", iterator, len),
 			t.updateExpression("++", iterator), expr
 		)
 
 	// Change the forState to be the labled for statement.
-	if(returnModder && returnModder.lbl) {
+	if (returnModder && returnModder.lbl) {
 		returnModder.lbl.body = forState;
 		forState = returnModder.lbl;
 	}
 
-	var exprs = [];	
-	if(!useArrExpr) {
+	var exprs = [];
+	if (!useArrExpr) {
 		exprs.push(t.variableDeclaration(LET, [t.variableDeclarator(arrayName, path.node.callee.object)]));
 	}
 	exprs.push(t.variableDeclaration(LET, [t.variableDeclarator(len, t.memberExpression(arrayName, t.identifier('length')))]));
 	var resExpr = mode === 1 ? t.newExpression(t.identifier('Array'), [len])
 		: mode === 2 ? t.arrayExpression()
-		: mode === 3 ? "\0"
-		: mode === 4 ? t.booleanLiteral(true)
-		: mode === 5 || mode === 6 ? path.node.arguments[1] || "\0"
-		: mode === 7 ? t.booleanLiteral(false)
-		: null;
-	if(resExpr) {
-		if(startIf) {
-			if(resExpr !== "\0") exprs.push(t.expressionStatement(t.assignmentExpression("=", resArrName, resExpr)));
+			: mode === 3 ? "\0"
+				: mode === 4 ? t.booleanLiteral(true)
+					: mode === 5 || mode === 6 ? path.node.arguments[1] || "\0"
+						: mode === 7 ? t.booleanLiteral(false)
+							: null;
+	if (resExpr) {
+		if (startIf) {
+			if (resExpr !== "\0") exprs.push(t.expressionStatement(t.assignmentExpression("=", resArrName, resExpr)));
 		} else {
-			exprs.push(t.variableDeclaration(LET, [resExpr === "\0" ?  t.variableDeclarator(resArrName) : t.variableDeclarator(resArrName, resExpr)]));
+			exprs.push(t.variableDeclaration(LET, [resExpr === "\0" ? t.variableDeclarator(resArrName) : t.variableDeclarator(resArrName, resExpr)]));
 		}
 	}
-	if(!isInFn) {
-		exprs.push(t.variableDeclaration(LET, [t.variableDeclarator(funcName,path.node.arguments[0])]));
-	}
+	// if (!isInFn) {
+	//	exprs.push(t.variableDeclaration(LET, [t.variableDeclarator(funcName, path.node.arguments[0])]));
+	// }
 	exprs.push(forState);
 
-	if(startIf) {
-		block.node.body.unshift(t.variableDeclaration(LET, [t.variableDeclarator(resArrName)]))
-		path.getStatementParent().insertBefore([ t.ifStatement(startIf, t.blockStatement(exprs)) ])
+	var blockNextPath = block.get("body."+blockIdx);
+
+	if (startIf) {
+		blockNextPath.insertBefore([t.variableDeclaration(LET, [t.variableDeclarator(resArrName)]), t.ifStatement(startIf, t.blockStatement(exprs))]);
 	} else {
-		path.getStatementParent().insertBefore(exprs)
+		blockNextPath.insertBefore(exprs);
 	}
+
 	const parentType = path.parentPath.type;
-	if(parentType === "ExpressionStatement") {
+	if (parentType === "ExpressionStatement") {
 		path.remove();
-	} else if(resArrName) {
+	} else if (resArrName) {
 		path.replaceWith(resArrName);
 	} else {
-		path.replaceWith(t.identifier("undefined"));		
+		path.replaceWith(t.identifier("undefined"));
 	}
 }
 
 export default (babel, opts) => {
 	const { types: t } = babel
-	const methods = { forEach:0, map:1, filter:2, find:3, every:4, reduce:5, reduceRight:6, some:7 };
-	if(opts.loose) LET = "var";
+	const methods = { forEach: 0, map: 1, filter: 2, find: 3, every: 4, reduce: 5, reduceRight: 6, some: 7 };
+	if (opts.loose) LET = "var";
 	return {
 		visitor: {
 			CallExpression(path) {
-				if(path.node.callee.property) { // && path.node.arguments.length === 1)
+				if (path.node.callee.property) { // && path.node.arguments.length === 1)
 					var method = methods[path.node.callee.property.name];
-					if(method !== undefined && !isNaN(method)) {
+					if (method !== undefined && !isNaN(method)) {
 						var opts = _findOrMakeStatementBlockAndGetOptions(t, path);
-						if(opts) { // Opts change to support find/reduce/reduceRight properly. Path changes due to arrowExpression.
-							if(method===3 || method===5) opts[0]=false;
-							else if(method===6) opts[0]=true;
+						if (opts) { // Opts change to support find/reduce/reduceRight properly. Path changes due to arrowExpression.
+							if (method === 3 || method === 5) opts[0] = false;
+							else if (method === 6) opts[0] = true;
 							Handle_map(t, path.node.arguments ? path : path.get("body.0.argument"), opts[0], opts[1], method);
 						}
-						
+
 					}
 				}
 
